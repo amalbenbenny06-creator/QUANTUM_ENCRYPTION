@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Post-Quantum Encryption Test</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 24px; color: #222; }
+    h1 { font-size: 22px; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin: 16px 0; }
+    .card h2 { margin-top: 0; font-size: 16px; }
+    form { display: flex; flex-direction: column; gap: 12px; }
+    label { font-weight: 600; font-size: 13px; }
+    input, textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+    textarea { width: 100%; min-height: 64px; resize: vertical; }
+    button { padding: 10px 16px; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; background: #fafafa; cursor: pointer; }
+    button:hover { background: #efefef; }
+    pre { background: #f4f4f4; border: 1px solid #ddd; border-radius: 6px; padding: 12px; font-size: 12px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+    .key-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .key-item { border: 1px solid #eee; border-radius: 6px; padding: 10px; }
+    .key-item pre { margin: 0; font-size: 11px; }
+    .hint { font-size: 12px; color: #666; }
+    .error { color: #b00020; }
+  </style>
+</head>
+<body>
+  <h1>Post-Quantum Messaging — Encryption Test</h1>
+  <p class="hint">Backend: <strong>http://127.0.0.1:8014</strong> &nbsp;|&nbsp; Plain-text encrypt returns <strong>only the ciphertext</strong>.</p>
+
+  <div class="card">
+    <h2>1 &nbsp;Provision a recipient key pair /keys</h2>
+    <form id="keys-form">
+      <button type="submit">Generate keypair</button>
+    </form>
+    <div id="keys-out" class="key-list"></div>
+  </div>
+
+  <div class="card">
+    <h2>2 &nbsp;Encrypt plaintext /encrypt</h2>
+    <form id="encrypt-form">
+      <label for="pubkey">Recipient public key</label>
+      <input type="text" id="pubkey" placeholder="Paste the public_key from step 1" />
+      <label for="plaintext">Plaintext</label>
+      <textarea id="plaintext" placeholder="hello world {{name}}">hello world {{name}}</textarea>
+      <button type="submit">Encrypt</button>
+    </form>
+    <pre id="encrypt-out"></pre>
+  </div>
+
+  <div class="card">
+    <h2>3 &nbsp;Decrypt and return the plaintext</h2>
+    <form id="decrypt-form">
+      <label for="decrypt-message-id">Message ID</label>
+      <input type="text" id="decrypt-message-id" placeholder="msg-1 (from step 4)" />
+      <label for="decrypt-conversation">Conversation ID</label>
+      <input type="text" id="decrypt-conversation" placeholder="conv-1" />
+      <button type="submit">Decrypt</button>
+    </form>
+    <pre id="decrypt-out"></pre>
+  </div>
+
+  <div class="card">
+    <h2>Manual quick-call (toggle the raw input)</h2>
+    <label>HTTP method <select id="verb">
+        <option value="GET">GET</option>
+        <option value="POST">POST</option>
+      </select></label>
+      <input type="text" id="route" placeholder="/health" style="width:100%;min-height:36px;font-family:monospace;" />
+      <label for="body">JSON body</label>
+      <textarea id="body" placeholder='{"plaintext":"hello world {{name}}","recipient_public_key":"..."}'></textarea>
+      <button id="run">Run</button>
+      <pre id="manual-out"></pre>
+  </div>
+
+  <script>
+    const API = "http://127.0.0.1:8014";
+
+    async function call(method, route, body) {
+      const res = await fetch(API + route, {
+        method,
+        headers: body ? { "Content-Type": "application/json" } : {},
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const text = await res.text();
+      try { return res.status === 204 ? null : JSON.parse(text); }
+      catch { return text; }
+    }
+
+    // ---- Step 1: keys ----
+    document.getElementById("keys-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const container = document.getElementById("keys-out");
+      container.innerHTML = '<span class="hint">generating…</span>';
+      try {
+        const data = await call("POST", "/keys");
+        if (data.error) throw new Error(data.detail || "keys failed");
+        container.innerHTML = `
+          <div class="key-item"><strong>key_id</strong><pre>${JSON.stringify(data.key_id)}</pre></div>
+          <div class="key-item"><strong>public_key</strong><pre>${JSON.stringify(data.public_key)}</pre></div>
+          <div class="key-item"><strong>algorithm</strong><pre>${JSON.stringify(data.algorithm)}</pre></div>
+          <div class="key-item"><strong>created_at</strong><pre>${JSON.stringify(data.created_at)}</pre></div>
+        `;
+        document.getElementById("pubkey").value = data.public_key;
+      } catch (err) {
+        container.innerHTML = `<div class="error">${err.message}</div>`;
+      }
+    });
+
+    // ---- Step 2: encrypt ----
+    document.getElementById("encrypt-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const out = document.getElementById("encrypt-out");
+      const pubkey = document.getElementById("pubkey").value.trim();
+      const plaintext = document.getElementById("plaintext").value.trim();
+      if (!pubkey) { out.textContent = "error: paste a public_key first"; return; }
+      try {
+        const data = await call("POST", "/encrypt", {
+          recipient_public_key: pubkey,
+          plaintext,
+        });
+        if (data.error) throw new Error(data.detail || "encrypt failed");
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        out.textContent = "error: " + err.message;
+      }
+    });
+
+    // ---- Step 3: decrypt ----
+    document.getElementById("decrypt-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const out = document.getElementById("decrypt-out");
+      const messageId = document.getElementById("decrypt-message-id").value.trim();
+      const conversation = document.getElementById("decrypt-conversation").value.trim() || "conv-1";
+      if (!messageId) { out.textContent = "error: paste a message_id"; return; }
+      try {
+        const data = await call("POST", `/conversations/${conversation}/messages/${messageId}/decrypt`);
+        if (data.error) throw new Error(data.detail || "decrypt failed");
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        out.textContent = "error: " + err.message;
+      }
+    });
+
+    // ---- Manual ----
+    document.getElementById("run").addEventListener("click", async () => {
+      const method = document.getElementById("verb").value;
+      const route = document.getElementById("route").value.trim();
+      const body = document.getElementById("body").value.trim();
+      const out = document.getElementById("manual-out");
+      try {
+        const data = await call(method, route, body ? JSON.parse(body) : undefined);
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        out.textContent = "error: " + err.message;
+      }
+    });
+  </script>
+</body>
+</html>

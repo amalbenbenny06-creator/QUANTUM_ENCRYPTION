@@ -49,6 +49,8 @@ from pydantic import BaseModel, Field
 from quantum_messaging import (
     MessageDecryptionError,
     decrypt_message,
+    decrypt,
+    encrypt,
     encrypt_message,
     export_encrypted_private_key,
     generate_keypair,
@@ -267,6 +269,29 @@ def create_key() -> KeyResponse:
         public_key=base64.b64encode(public_key).decode("ascii"),
         created_at=_iso(created_at),
     )
+
+
+class EncryptRequest(BaseModel):
+    recipient_public_key: str = Field(..., description="recipient ML-KEM-768 public key, base64")
+    plaintext: str = Field(..., max_length=MAX_PLAINTEXT_CHARS)
+
+
+class EncryptResponse(BaseModel):
+    ciphertext: str
+
+
+@app.post(
+    "/encrypt",
+    status_code=status.HTTP_200_OK,
+    response_model=EncryptResponse,
+    dependencies=[Depends(require_token)],
+)
+
+def encrypt_plaintext(request: EncryptRequest) -> EncryptResponse:
+    """Encrypt the plaintext and return only the ciphertext. Nothing else."""
+    public_key = base64.b64decode(request.recipient_public_key, validate=True)
+    ciphertext = encrypt(request.plaintext, public_key)
+    return EncryptResponse(ciphertext=ciphertext)
 
 
 @app.get(

@@ -63,6 +63,48 @@ def generate_keypair() -> tuple[MLKEM768PrivateKey, bytes]:
     return private_key, private_key.public_key().public_bytes_raw()
 
 
+# Plain-text encryption (no envelope / no metadata). Returns the raw
+# base64 ciphertext so the caller can store/forward it as-is.
+
+
+def encrypt(plaintext: str, recipient_public_key: bytes) -> str:
+    """Encrypt UTF-8 text and return the raw base64 ciphertext.
+
+    No envelope, no metadata: this is the smallest possible encrypt() for
+    storing or forwarding an encrypted blob directly.
+    """
+    if not isinstance(plaintext, str):
+        raise TypeError("plaintext must be str")
+    from cryptography.hazmat.primitives.asymmetric.mlkem import MLKEM768PublicKey
+
+    public_key = MLKEM768PublicKey.from_public_bytes(recipient_public_key)
+    ciphertext = _SUITE.encrypt(plaintext.encode("utf-8"), public_key)
+    return base64.b64encode(ciphertext).decode("ascii")
+
+
+
+# Plain-text encryption (no envelope / no metadata). Returns the raw
+# base64 ciphertext so the caller can store/forward it as-is.
+
+
+def encrypt(plaintext: str, recipient_public_key: bytes) -> str:
+    """Encrypt UTF-8 text and return the raw base64 ciphertext.
+
+    No envelope, no metadata: this is the smallest possible encrypt() for
+    storing or forwarding an encrypted blob directly.
+    """
+    if not isinstance(plaintext, str):
+        raise TypeError("plaintext must be str")
+    from cryptography.hazmat.primitives.asymmetric.mlkem import MLKEM768PublicKey
+
+    public_key = MLKEM768PublicKey.from_public_bytes(recipient_public_key)
+    ciphertext = _SUITE.encrypt(plaintext.encode("utf-8"), public_key)
+    return base64.b64encode(ciphertext).decode("ascii")
+
+
+
+
+
 def export_encrypted_private_key(
     private_key: MLKEM768PrivateKey, passphrase: bytes
 ) -> bytes:
@@ -145,6 +187,24 @@ def encrypt_message(
     ).to_bytes()
 
 
+def decrypt(
+    encrypted_b64: str,
+    private_key: MLKEM768PrivateKey,
+) -> str:
+    """Decrypt a base64-encoded ciphertext and return the plaintext.
+
+    Lowest-level decrypt() for the plain-text API: takes the raw base64
+    ciphertext (as returned by :func:`encrypt`) and the private key,
+    returns the plaintext string.
+    """
+    ciphertext = base64.b64decode(encrypted_b64, validate=True)
+    # Direct raw-KEM decrypt: no envelope context binds. The HPKE suite
+    # already binds the recipient public key and message context inside
+    # the AEAD authenticator, so tampering is detected by decryption failure.
+    plaintext = _SUITE.decrypt(ciphertext, private_key)
+    return plaintext.decode("utf-8")
+
+
 def decrypt_message(
     private_key: MLKEM768PrivateKey,
     envelope_bytes: bytes,
@@ -188,3 +248,16 @@ def decrypt_message(
         # One application-level failure surface; never log the underlying exception.
         raise MessageDecryptionError("message could not be decrypted") from None
 
+__all__ = [
+    "Envelope",
+    "MessageDecryptionError",
+    "encrypt",
+    "decrypt",
+    "decrypt",
+    "encrypt_message",
+    "decrypt_message",
+    "export_encrypted_private_key",
+    "generate_keypair",
+    "load_encrypted_private_key",
+    "validate_identifier",
+]
