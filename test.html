@@ -2,155 +2,415 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Post-Quantum Encryption Test</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Post-Quantum Messaging — Encryption Test</title>
   <style>
-    body { font-family: system-ui, -apple-system, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 24px; color: #222; }
+    :root {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #222;
+      background: #fff;
+    }
+
+    body {
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 0 24px;
+    }
+
     h1 { font-size: 22px; }
-    .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin: 16px 0; }
-    .card h2 { margin-top: 0; font-size: 16px; }
-    form { display: flex; flex-direction: column; gap: 12px; }
-    label { font-weight: 600; font-size: 13px; }
-    input, textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
-    textarea { width: 100%; min-height: 64px; resize: vertical; }
-    button { padding: 10px 16px; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; background: #fafafa; cursor: pointer; }
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+    .card h2 {
+      margin-top: 0;
+      font-size: 16px;
+    }
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    label {
+      font-weight: 600;
+      font-size: 13px;
+    }
+    input, textarea, select {
+      box-sizing: border-box;
+      width: 100%;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      padding: 8px;
+    }
+    textarea {
+      min-height: 64px;
+      resize: vertical;
+    }
+    button {
+      padding: 10px 16px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #fafafa;
+      cursor: pointer;
+    }
     button:hover { background: #efefef; }
-    pre { background: #f4f4f4; border: 1px solid #ddd; border-radius: 6px; padding: 12px; font-size: 12px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
-    .key-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .key-item { border: 1px solid #eee; border-radius: 6px; padding: 10px; }
-    .key-item pre { margin: 0; font-size: 11px; }
-    .hint { font-size: 12px; color: #666; }
+    button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+    pre {
+      background: #f4f4f4;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 12px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .key-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .key-item {
+      min-width: 0;
+      border: 1px solid #eee;
+      border-radius: 6px;
+      padding: 10px;
+    }
+    .key-item pre {
+      margin: 6px 0 0;
+      font-size: 11px;
+    }
+    .hint {
+      font-size: 12px;
+      color: #666;
+    }
     .error { color: #b00020; }
+    .success { color: #16733a; }
+    @media (max-width: 600px) {
+      body { margin: 20px auto; padding: 0 14px; }
+      .key-list { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
   <h1>Post-Quantum Messaging — Encryption Test</h1>
-  <p class="hint">Backend: <strong>http://127.0.0.1:8014</strong> &nbsp;|&nbsp; Plain-text encrypt returns <strong>only the ciphertext</strong>.</p>
+  <p class="hint">
+    Backend: <strong id="backend-label">http://127.0.0.1:8014</strong>
+    &nbsp;|&nbsp; Plain-text encrypt returns <strong>only the ciphertext</strong>.
+  </p>
 
   <div class="card">
-    <h2>1 &nbsp;Provision a recipient key pair /keys</h2>
+    <h2>API configuration</h2>
+    <form id="config-form">
+      <label for="api-base">Backend base URL</label>
+      <input id="api-base" type="url" value="http://127.0.0.1:8014" required />
+      <label for="api-token">API token (leave empty if authentication is disabled)</label>
+      <input id="api-token" type="password" placeholder="MESSAGING_API_TOKEN, if configured" />
+      <button type="submit">Save API settings</button>
+    </form>
+    <p id="config-status" class="hint"></p>
+  </div>
+
+  <div class="card">
+    <h2>1. Provision a recipient key pair — POST /keys</h2>
     <form id="keys-form">
-      <button type="submit">Generate keypair</button>
+      <button id="keys-button" type="submit">Generate keypair</button>
     </form>
     <div id="keys-out" class="key-list"></div>
   </div>
 
   <div class="card">
-    <h2>2 &nbsp;Encrypt plaintext /encrypt</h2>
+    <h2>2. Encrypt plaintext — POST /encrypt</h2>
     <form id="encrypt-form">
       <label for="pubkey">Recipient public key</label>
-      <input type="text" id="pubkey" placeholder="Paste the public_key from step 1" />
+      <textarea id="pubkey" placeholder="Generated public key will appear here" required></textarea>
       <label for="plaintext">Plaintext</label>
-      <textarea id="plaintext" placeholder="hello world {{name}}">hello world {{name}}</textarea>
-      <button type="submit">Encrypt</button>
+      <textarea id="plaintext">hello world {{name}}</textarea>
+      <button id="encrypt-button" type="submit">Encrypt</button>
     </form>
-    <pre id="encrypt-out"></pre>
+    <pre id="encrypt-out">Ciphertext will appear here.</pre>
   </div>
 
   <div class="card">
-    <h2>3 &nbsp;Decrypt and return the plaintext</h2>
+    <h2>3. Send and store a message — POST /conversations/{conversation_id}/messages</h2>
+    <p class="hint">
+      This creates a stored message that can be decrypted in step 4.
+      The standalone /encrypt endpoint above does not store a message and does not return a message ID.
+    </p>
+    <form id="send-form">
+      <label for="conversation-id">Conversation ID</label>
+      <input id="conversation-id" value="conv-1" required />
+      <label for="recipient-key-id">Recipient key ID</label>
+      <input id="recipient-key-id" placeholder="Generated key_id will appear here" required />
+      <label for="message-plaintext">Message plaintext</label>
+      <textarea id="message-plaintext">hello world {{name}}</textarea>
+      <button id="send-button" type="submit">Send and store message</button>
+    </form>
+    <pre id="send-out">Stored message details will appear here.</pre>
+  </div>
+
+  <div class="card">
+    <h2>4. Decrypt a stored message — POST /conversations/{conversation_id}/messages/{message_id}/decrypt</h2>
     <form id="decrypt-form">
       <label for="decrypt-message-id">Message ID</label>
-      <input type="text" id="decrypt-message-id" placeholder="msg-1 (from step 4)" />
+      <input id="decrypt-message-id" placeholder="Filled automatically after step 3" required />
       <label for="decrypt-conversation">Conversation ID</label>
-      <input type="text" id="decrypt-conversation" placeholder="conv-1" />
-      <button type="submit">Decrypt</button>
+      <input id="decrypt-conversation" value="conv-1" required />
+      <button id="decrypt-button" type="submit">Decrypt</button>
     </form>
-    <pre id="decrypt-out"></pre>
+    <pre id="decrypt-out">Decrypted plaintext will appear here.</pre>
   </div>
 
   <div class="card">
-    <h2>Manual quick-call (toggle the raw input)</h2>
-    <label>HTTP method <select id="verb">
+    <h2>Manual API call</h2>
+    <form id="manual-form">
+      <label for="verb">HTTP method</label>
+      <select id="verb">
         <option value="GET">GET</option>
         <option value="POST">POST</option>
-      </select></label>
-      <input type="text" id="route" placeholder="/health" style="width:100%;min-height:36px;font-family:monospace;" />
-      <label for="body">JSON body</label>
-      <textarea id="body" placeholder='{"plaintext":"hello world {{name}}","recipient_public_key":"..."}'></textarea>
-      <button id="run">Run</button>
-      <pre id="manual-out"></pre>
+      </select>
+      <label for="route">Route (include the leading /)</label>
+      <input id="route" value="/health" />
+      <label for="body">JSON body (leave empty for no body)</label>
+      <textarea id="body" placeholder='{"plaintext":"hello world","recipient_public_key":"..."}'></textarea>
+      <button id="run-button" type="submit">Run request</button>
+    </form>
+    <pre id="manual-out"></pre>
   </div>
 
   <script>
-    const API = "http://127.0.0.1:8014";
+    let API = "http://127.0.0.1:8000";
+    let API_TOKEN = "";
 
-    async function call(method, route, body) {
-      const res = await fetch(API + route, {
-        method,
-        headers: body ? { "Content-Type": "application/json" } : {},
-        body: body ? JSON.stringify(body) : undefined,
-      });
-      const text = await res.text();
-      try { return res.status === 204 ? null : JSON.parse(text); }
-      catch { return text; }
+    function setOutput(elementId, value, isError = false) {
+      const element = document.getElementById(elementId);
+      element.textContent = value;
+      element.classList.toggle("error", isError);
     }
 
-    // ---- Step 1: keys ----
-    document.getElementById("keys-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
+    async function call(method, route, body) {
+      const base = API.replace(/\/+$/, "");
+      const path = route.startsWith("/") ? route : `/${route}`;
+
+      const headers = {};
+      if (body !== undefined) {
+        headers["Content-Type"] = "application/json";
+      }
+      if (API_TOKEN) {
+        headers["Authorization"] = `Bearer ${API_TOKEN}`;
+      }
+
+      let response;
+      try {
+        response = await fetch(`${base}${path}`, {
+          method,
+          headers,
+          body: body !== undefined ? JSON.stringify(body) : undefined
+        });
+      } catch (error) {
+        throw new Error(
+          `Network request failed. Check that the backend is running at ${base}, ` +
+          `that the port is correct, and that CORS allows this page's origin. ` +
+          `Browser detail: ${error.message}`
+        );
+      }
+
+      const responseText = await response.text();
+      let data = null;
+
+      if (responseText) {
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          data = responseText;
+        }
+      }
+
+      if (!response.ok) {
+        const detail = data && typeof data === "object"
+          ? (data.detail || data.message || JSON.stringify(data))
+          : data;
+        throw new Error(`HTTP ${response.status}: ${detail || response.statusText}`);
+      }
+
+      return data;
+    }
+
+    document.getElementById("config-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      API = document.getElementById("api-base").value.trim().replace(/\/+$/, "");
+      API_TOKEN = document.getElementById("api-token").value.trim();
+      document.getElementById("backend-label").textContent = API;
+      document.getElementById("config-status").textContent = "API settings updated.";
+    });
+
+    document.getElementById("keys-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const button = document.getElementById("keys-button");
       const container = document.getElementById("keys-out");
-      container.innerHTML = '<span class="hint">generating…</span>';
+      button.disabled = true;
+      container.textContent = "Generating keypair...";
+
       try {
         const data = await call("POST", "/keys");
-        if (data.error) throw new Error(data.detail || "keys failed");
+
+        if (!data || !data.public_key || !data.key_id) {
+          throw new Error("The backend response did not contain key_id and public_key.");
+        }
+
         container.innerHTML = `
-          <div class="key-item"><strong>key_id</strong><pre>${JSON.stringify(data.key_id)}</pre></div>
-          <div class="key-item"><strong>public_key</strong><pre>${JSON.stringify(data.public_key)}</pre></div>
-          <div class="key-item"><strong>algorithm</strong><pre>${JSON.stringify(data.algorithm)}</pre></div>
-          <div class="key-item"><strong>created_at</strong><pre>${JSON.stringify(data.created_at)}</pre></div>
+          <div class="key-item"><strong>key_id</strong><pre></pre></div>
+          <div class="key-item"><strong>public_key</strong><pre></pre></div>
+          <div class="key-item"><strong>algorithm</strong><pre></pre></div>
+          <div class="key-item"><strong>created_at</strong><pre></pre></div>
         `;
+
+        const values = [data.key_id, data.public_key, data.algorithm, data.created_at];
+        container.querySelectorAll("pre").forEach((pre, index) => {
+          pre.textContent = values[index] ?? "";
+        });
+
         document.getElementById("pubkey").value = data.public_key;
-      } catch (err) {
-        container.innerHTML = `<div class="error">${err.message}</div>`;
+        document.getElementById("recipient-key-id").value = data.key_id;
+      } catch (error) {
+        container.textContent = error.message;
+        container.classList.add("error");
+      } finally {
+        button.disabled = false;
       }
     });
 
-    // ---- Step 2: encrypt ----
-    document.getElementById("encrypt-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const out = document.getElementById("encrypt-out");
-      const pubkey = document.getElementById("pubkey").value.trim();
-      const plaintext = document.getElementById("plaintext").value.trim();
-      if (!pubkey) { out.textContent = "error: paste a public_key first"; return; }
+    document.getElementById("encrypt-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const button = document.getElementById("encrypt-button");
+      const publicKey = document.getElementById("pubkey").value.trim();
+      const plaintext = document.getElementById("plaintext").value;
+
+      if (!publicKey) {
+        setOutput("encrypt-out", "Enter or generate a recipient public key first.", true);
+        return;
+      }
+
+      button.disabled = true;
+      setOutput("encrypt-out", "Encrypting...");
+
       try {
         const data = await call("POST", "/encrypt", {
-          recipient_public_key: pubkey,
-          plaintext,
+          recipient_public_key: publicKey,
+          plaintext
         });
-        if (data.error) throw new Error(data.detail || "encrypt failed");
-        out.textContent = JSON.stringify(data, null, 2);
-      } catch (err) {
-        out.textContent = "error: " + err.message;
+        setOutput("encrypt-out", JSON.stringify(data, null, 2));
+      } catch (error) {
+        setOutput("encrypt-out", error.message, true);
+      } finally {
+        button.disabled = false;
       }
     });
 
-    // ---- Step 3: decrypt ----
-    document.getElementById("decrypt-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const out = document.getElementById("decrypt-out");
-      const messageId = document.getElementById("decrypt-message-id").value.trim();
-      const conversation = document.getElementById("decrypt-conversation").value.trim() || "conv-1";
-      if (!messageId) { out.textContent = "error: paste a message_id"; return; }
+    document.getElementById("send-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const button = document.getElementById("send-button");
+      const conversationId = document.getElementById("conversation-id").value.trim();
+      const recipientKeyId = document.getElementById("recipient-key-id").value.trim();
+      const plaintext = document.getElementById("message-plaintext").value;
+
+      if (!conversationId || !recipientKeyId) {
+        setOutput("send-out", "Conversation ID and recipient key ID are required.", true);
+        return;
+      }
+
+      button.disabled = true;
+      setOutput("send-out", "Sending and storing message...");
+
       try {
-        const data = await call("POST", `/conversations/${conversation}/messages/${messageId}/decrypt`);
-        if (data.error) throw new Error(data.detail || "decrypt failed");
-        out.textContent = JSON.stringify(data, null, 2);
-      } catch (err) {
-        out.textContent = "error: " + err.message;
+        const data = await call(
+          "POST",
+          `/conversations/${encodeURIComponent(conversationId)}/messages`,
+          {
+            recipient_key_id: recipientKeyId,
+            plaintext
+          }
+        );
+
+        document.getElementById("decrypt-message-id").value = data.message_id;
+        document.getElementById("decrypt-conversation").value = data.conversation_id;
+        setOutput("send-out", JSON.stringify(data, null, 2));
+      } catch (error) {
+        setOutput("send-out", error.message, true);
+      } finally {
+        button.disabled = false;
       }
     });
 
-    // ---- Manual ----
-    document.getElementById("run").addEventListener("click", async () => {
+    document.getElementById("decrypt-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const button = document.getElementById("decrypt-button");
+      const messageId = document.getElementById("decrypt-message-id").value.trim();
+      const conversationId = document.getElementById("decrypt-conversation").value.trim();
+
+      if (!messageId || !conversationId) {
+        setOutput("decrypt-out", "Message ID and conversation ID are required.", true);
+        return;
+      }
+
+      button.disabled = true;
+      setOutput("decrypt-out", "Decrypting...");
+
+      try {
+        const data = await call(
+          "POST",
+          `/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/decrypt`
+        );
+        setOutput("decrypt-out", JSON.stringify(data, null, 2));
+      } catch (error) {
+        setOutput("decrypt-out", error.message, true);
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    document.getElementById("manual-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const button = document.getElementById("run-button");
       const method = document.getElementById("verb").value;
       const route = document.getElementById("route").value.trim();
-      const body = document.getElementById("body").value.trim();
-      const out = document.getElementById("manual-out");
+      const bodyText = document.getElementById("body").value.trim();
+
+      if (!route.startsWith("/")) {
+        setOutput("manual-out", "Route must start with /.", true);
+        return;
+      }
+
+      let body;
       try {
-        const data = await call(method, route, body ? JSON.parse(body) : undefined);
-        out.textContent = JSON.stringify(data, null, 2);
-      } catch (err) {
-        out.textContent = "error: " + err.message;
+        body = bodyText ? JSON.parse(bodyText) : undefined;
+      } catch {
+        setOutput("manual-out", "The request body is not valid JSON.", true);
+        return;
+      }
+
+      button.disabled = true;
+      setOutput("manual-out", "Sending request...");
+
+      try {
+        const data = await call(method, route, body);
+        setOutput("manual-out", data === null ? "Request succeeded (no response body)." : JSON.stringify(data, null, 2));
+      } catch (error) {
+        setOutput("manual-out", error.message, true);
+      } finally {
+        button.disabled = false;
       }
     });
   </script>

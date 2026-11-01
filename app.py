@@ -43,6 +43,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
@@ -58,7 +59,11 @@ from quantum_messaging import (
     validate_identifier,
 )
 
-PASSPHRASE_ENV = "MESSAGING_KEY_PASSPHRASE"
+# Local-development secret: replace this with your own private value.
+# Keep it unchanged between restarts or existing encrypted private keys
+# will no longer be decryptable. Never commit a real production secret.
+MESSAGING_KEY_PASSPHRASE = "MvFoiIXX2FNtW073k5JUl8h5W2bodA8VygTJZiL1wm8"
+
 TOKEN_ENV = "MESSAGING_API_TOKEN"
 MIN_PASSPHRASE_BYTES = 16
 MAX_PLAINTEXT_CHARS = 16_000
@@ -137,7 +142,21 @@ class MessageStore:
 
 
 store = MessageStore()
-app = FastAPI(title="Post-Quantum Messaging Backend", version="1.0.0")
+
+app = FastAPI(
+    title="Post-Quantum Messaging Backend",
+    version="1.0.0",
+)
+
+# CORS: allow the separately hosted frontend to call this API during development.
+# For production, replace ["*"] with the exact frontend origin(s).
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -197,14 +216,18 @@ def require_token(
 
 
 def custody_passphrase() -> bytes:
-    raw = os.environ.get(PASSPHRASE_ENV, "")
-    if len(raw.encode("utf-8")) < MIN_PASSPHRASE_BYTES:
+    passphrase = MESSAGING_KEY_PASSPHRASE.encode("utf-8")
+
+    if len(passphrase) < MIN_PASSPHRASE_BYTES:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"{PASSPHRASE_ENV} must be configured with at least "
-            f"{MIN_PASSPHRASE_BYTES} bytes",
+            detail=(
+                "MESSAGING_KEY_PASSPHRASE in app.py must contain at least "
+                f"{MIN_PASSPHRASE_BYTES} bytes"
+            ),
         )
-    return raw.encode("utf-8")
+
+    return passphrase
 
 
 def _iso(timestamp: float) -> str:
